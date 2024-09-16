@@ -2,10 +2,10 @@ from typing import Mapping
 
 from dagflow.logger import logger
 
-from .dayabay_v0 import model_dayabay_v0
+from .experiment_v0 import model_experiment_v0
 
 _dayabay_models = {
-    "v0": model_dayabay_v0,
+    "v0": model_experiment_v0,
 }
 
 
