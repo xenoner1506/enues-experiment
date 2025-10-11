@@ -7,17 +7,46 @@ from typing import Literal
 from numpy import ndarray
 from numpy.random import Generator
 
-from dagflow.bundles.file_reader import FileReader
-from dagflow.bundles.load_graph import load_graph
-from dagflow.bundles.load_parameters import load_parameters
-from dagflow.graph import Graph
-from dagflow.lib.arithmetic import Division, Product, Sum
-from dagflow.lib.InterpolatorGroup import InterpolatorGroup
-from dagflow.storage import NodeStorage
-from dagflow.tools.schema import LoadYaml
-from multikeydict.nestedmkdict import NestedMKDict
 
-SourceTypes = Literal["tsv", "hdf5", "root", "npz"]
+from collections.abc import Mapping, Sequence
+from itertools import product
+from os.path import relpath
+from pathlib import Path
+
+from dag_modelling.core import Graph, NodeStorage
+from nested_mapping import NestedMapping
+from numpy import ndarray
+from numpy.random import Generator
+
+from dag_modelling.bundles.file_reader import FileReader
+from dag_modelling.bundles.load_graph import load_graph
+from dag_modelling.bundles.load_parameters import load_parameters
+from dag_modelling.bundles.load_record import load_record_data
+from dag_modelling.lib.hist import AxisDistortionMatrixPointwise, Rebin
+from dag_modelling.lib.arithmetic import (
+    Division,
+    Product,
+    Sum,
+)
+
+from dag_modelling.lib.common import Array, Proxy, View
+from dag_modelling.lib.integration import Integrator
+from dag_modelling.lib.interpolation import Interpolator
+from dag_modelling.lib.linalg import Cholesky, VectorMatrixProduct
+from dag_modelling.lib.physics import EnergyResolution
+from dag_modelling.lib.statistics import (
+    Chi2,
+    CovarianceMatrixGroup,
+    MonteCarlo,
+)
+from dag_modelling.lib.summation import ArraySum, SumMatOrDiag
+from dag_modelling.tools.schema import LoadYaml
+
+from dgm_reactor_neutrino import (
+    IBDXsecVBO1Group,
+    InverseSquareLaw,
+)
+
 
 
 class model_experiment_v0:
@@ -31,7 +60,6 @@ class model_experiment_v0:
         "_source_type",
         "_strict",
         "_close",
-        "_fission_fraction_normalized",
         "_generator",
     )
 
@@ -41,8 +69,7 @@ class model_experiment_v0:
     combinations: dict[str, tuple[tuple[str, ...], ...]]
     _path_data: Path
     _override_indices: Mapping[str, Sequence[str]]
-    _source_type: SourceTypes
-    _fission_fraction_normalized: bool
+    _source_type: Literal["tsv"]
     _strict: bool
     _close: bool
     _generator: Generator
@@ -50,11 +77,10 @@ class model_experiment_v0:
     def __init__(
         self,
         *,
-        source_type: SourceTypes = "tsv",
+        source_type: Literal["tsv"] = "tsv",
         strict: bool = True,
         close: bool = True,
         override_indices: Mapping[str, Sequence[str]] = {},
-        fission_fraction_normalized: bool = False,
         seed: int = 0,
         parameter_values: dict[str, float | str] = {},
     ):
@@ -63,10 +89,9 @@ class model_experiment_v0:
 
         self.graph = None
         self.storage = NodeStorage()
-        self._path_data = Path("data")
+        self._path_data = Path("data-1ad-point")
         self._source_type = source_type
         self._override_indices = override_indices
-        self._fission_fraction_normalized = fission_fraction_normalized
         self._generator = self._create_generator(seed)
 
         self.index = {}
@@ -84,7 +109,7 @@ class model_experiment_v0:
         path_parameters = path_data / "parameters"
         path_arrays = path_data / self._source_type
 
-        from dagflow.tools.schema import LoadPy
+        from dag_modelling.tools.schema import LoadPy
 
         antineutrino_model_edges = LoadPy(
             path_parameters / "reactor_antineutrino_spectrum_edges.py",
@@ -104,8 +129,11 @@ class model_experiment_v0:
         index["isotope"] = ("U235", "U238", "Pu239", "Pu241")
         index["isotope_lower"] = tuple(i.lower() for i in index["isotope"])
         index["detector"] = ("AD11",)
+        # index["detector"] = ("AD11", "AD12")
+        index["subdetector"] = ("sub1",)
+        # index["subdetector"] = ("sub1", "sub2", "sub3", "sub4", "sub5", "sub6")
         index["site"] = ("EH1",)
-        index["reactor"] = ("DB1",)
+        index["reactor"] = ("R1",)
         index["anue_source"] = ("main", "offeq")
         index["anue_unc"] = ("uncorr", "corr")
         index["lsnl"] = ("nominal", "pull0", "pull1", "pull2", "pull3")
@@ -116,9 +144,7 @@ class model_experiment_v0:
 
         index.update(self._override_indices)
 
-        index_all = (
-            index["isotope"] + index["detector"] + index["reactor"]
-        )
+        index_all = index["isotope"] + index["detector"] + index["reactor"]
         set_all = set(index_all)
         if len(index_all) != len(set_all):
             raise RuntimeError("Repeated indices")
@@ -128,6 +154,7 @@ class model_experiment_v0:
             "reactor.isotope",
             "reactor.isotope.detector",
             "anue_unc.isotope",
+            "reactor.detector.subdetector",
         )
         # Provide the combinations of indices
         combinations = self.combinations
@@ -138,8 +165,8 @@ class model_experiment_v0:
                 items.append(it)
             combinations[combname] = tuple(items)
 
-        combinations["anue_source.reactor.isotope.detector"] = (
-            tuple(("main",) + cmb for cmb in combinations["reactor.isotope.detector"])
+        combinations["anue_source.reactor.isotope.detector"] = tuple(
+            ("main",) + cmb for cmb in combinations["reactor.isotope.detector"]
         )
 
         with (
@@ -153,17 +180,16 @@ class model_experiment_v0:
             # Load parameters
             #
             load_parameters(path="oscprob",    load=path_parameters/"oscprob.yaml")
-            # load_parameters(path="oscprob",    load=path_parameters/"oscprob_solar.yaml", joint_nuisance=True)
-            load_parameters(path="oscprob",    load=path_parameters/"oscprob_constants.yaml"
-            )
+            load_parameters(path="oscprob",    load=path_parameters/"oscprob_solar.yaml", joint_nuisance=True)
+            load_parameters(path="oscprob",    load=path_parameters/"oscprob_constants.yaml")
 
             load_parameters(path="ibd",        load=path_parameters/"pdg2012.yaml")
-            load_parameters(path="ibd.csc",    load=path_parameters/"ibd_constants.yaml"
-            )
+            load_parameters(path="ibd.csc",    load=path_parameters/"ibd_constants.yaml")
             load_parameters(path="conversion", load=path_parameters/"conversion_thermal_power.yaml")
             load_parameters(path="conversion", load=path_parameters/"conversion_oscprob_argument.yaml")
 
             load_parameters(                   load=path_parameters/"baselines.yaml")
+            load_parameters(                   load=path_parameters/"baselines-weighted.yaml")
 
             load_parameters(path="detector",   load=path_parameters/"detector_efficiency.yaml")
             load_parameters(path="detector",   load=path_parameters/"detector_normalization.yaml")
@@ -186,37 +212,27 @@ class model_experiment_v0:
                 parameters={
                     "conversion": {
                         "seconds_in_day_inverse": 1 / (60 * 60 * 24),
-                    }
+                    },
+                    "oscprob": {
+                        "gamma": 0.816191,
+                        "delta": 300.875,
+                    },
                 },
                 labels={
                     "conversion": {
                         "seconds_in_day_inverse": "One divided by seconds in day",
-                    }
+                    },
+                    "oscprob": {
+                        "gamma": "gamma",
+                        "delta": "delta",
+                    },
                 },
             )
 
-            # Statistic constants for write-handed CNP
-            load_parameters(
-                format="value",
-                state="fixed",
-                parameters={
-                    "stats": {
-                        "pearson": 2 / 3,
-                        "neyman": 1 / 3,
-                    }
-                },
-                labels={
-                    "stats": {
-                        "pearson": "Pearson coefficient",
-                        "neyman": "Neyman coefficient",
-                    }
-                },
-            )
-
-            nodes = storage.child("nodes")
-            inputs = storage.child("inputs")
-            outputs = storage.child("outputs")
-            data = storage.child("data")
+            nodes = storage.create_child("nodes")
+            inputs = storage.create_child("inputs")
+            outputs = storage.create_child("outputs")
+            data = storage.create_child("data")
             parameters = storage("parameters")
             parameters_nuisance_normalized = storage("parameters.normalized")
 
@@ -231,84 +247,115 @@ class model_experiment_v0:
             #
             # Define binning
             #
-            in_edges_fine = linspace(0, 12, 2401)
+            in_edges_fine = linspace(0, 12, 481)
             # in_edges_final = concatenate(([0.7], arange(1.2, 8.01, 0.20), [12.0]))
-            in_edges_final =  arange(.7, 12.01, 0.05)
+            in_edges_final = arange(.95, 12.01, .05)
 
-            from dagflow.lib.Array import Array
-            from dagflow.lib.View import View
-            edges_costheta, _ = Array.make_stored("edges.costheta", [-1, 1])
-            edges_energy_common, _ = Array.make_stored(
-                "edges.energy_common", in_edges_fine
+            edges_costheta, _ = Array.replicate(name="edges.costheta", array=[-1, 1])
+            # edges_costheta, _ = Array.replicate(name="edges.costheta", array=[0])
+            edges_energy_common, _ = Array.replicate(
+                name="edges.energy_common", array=in_edges_fine
             )
-            edges_energy_final, _ = Array.make_stored(
-                "edges.energy_final", in_edges_final
+            edges_energy_final, _ = Array.replicate(
+                name="edges.energy_final", array=in_edges_final
             )
-            View.make_stored("edges.energy_enu", edges_energy_common)
-            edges_energy_edep, _ = View.make_stored("edges.energy_edep", edges_energy_common)
-            edges_energy_erec, _ = View.make_stored("edges.energy_erec", edges_energy_common)
+            View.replicate(name="edges.energy_enu", output=edges_energy_common)
+            edges_energy_edep, _ = View.replicate(name="edges.energy_edep", output=edges_energy_common)
+            edges_energy_evis, _ = View.replicate(name="edges.energy_evis", output=edges_energy_common)
+            edges_energy_evis, _ = Array.replicate(name="edges.energy_evis_fine", array=linspace(0., 12., 2401))
+            edges_energy_erec, _ = View.replicate(name="edges.energy_erec", output=edges_energy_common)
 
-            Array.make_stored("reactor_anue.spec_model_edges", antineutrino_model_edges)
+            Array.replicate(name="reactor_anue.spec_model_edges", array=antineutrino_model_edges)
 
             #
             # Integration, kinematics
             #
-            integration_orders_edep, _ = Array.from_value("kinematics_sampler.ordersx", 5, edges=edges_energy_edep)
-            integration_orders_costheta, _ = Array.from_value("kinematics_sampler.ordersy", 3, edges=edges_costheta)
+            integration_orders_edep = Array.from_value("kinematics_sampler.ordersx", 5, edges=edges_energy_edep)
+            integration_orders_costheta = Array.from_value("kinematics_sampler.ordersy", 3, edges=edges_costheta)
+            # integration_orders_costheta = Array.from_value("kinematics_sampler.ordersy", 1, edges=edges_costheta)
 
-            from dagflow.lib.IntegratorGroup import IntegratorGroup
-            integrator, _ = IntegratorGroup.replicate(
-                "2d",
-                names = {
-                    "sampler": "kinematics_sampler",
-                    "integrator": "kinematics_integral",
-                    "x": "mesh_edep",
-                    "y": "mesh_costheta"
+            Integrator.replicate(
+                "gl2d",
+                path="kinematics",
+                names={
+                    "sampler": "sampler",
+                    "integrator": "integral",
+                    "mesh_x": "sampler.mesh_edep",
+                    "mesh_y": "sampler.mesh_costheta",
+                    "orders_x": "sampler.orders_edep",
+                    "orders_y": "sampler.orders_costheta",
                 },
-                replicate_outputs = combinations["anue_source.reactor.isotope.detector"]
+                replicate_outputs=combinations["anue_source.reactor.isotope.detector"]
             )
-            integration_orders_edep >> integrator("ordersX")
-            integration_orders_costheta >> integrator("ordersY")
+            integration_orders_edep >> inputs.get_value("kinematics.sampler.orders_edep")
+            integration_orders_costheta >> inputs.get_value("kinematics.sampler.orders_costheta")
 
-            from dgf_reactoranueosc.IBDXsecVBO1Group import IBDXsecVBO1Group
-            ibd, _ = IBDXsecVBO1Group.make_stored(use_edep=True)
+            ibd, _ = IBDXsecVBO1Group.replicate(path="kinematics.ibd", input_energy="edep")
             ibd << storage("parameters.constant.ibd")
             ibd << storage("parameters.constant.ibd.csc")
-            outputs.get_value("kinematics_sampler.mesh_edep") >> ibd.inputs["edep"]
-            outputs.get_value("kinematics_sampler.mesh_costheta") >> ibd.inputs["costheta"]
+            outputs.get_value("kinematics.sampler.mesh_edep") >> ibd.inputs["edep"]
+            outputs.get_value("kinematics.sampler.mesh_costheta") >> ibd.inputs["costheta"]
             kinematic_integrator_enu = ibd.outputs["enu"]
 
-            from dagflow.bundles.load_record import load_record_data
-            load_record_data(
-                name="distributions",
-                replicate_outputs=index["detector"],
-                objects={"distributions": "AD11"},
-                filenames=path_arrays/f"distributions.{self._source_type}",
-                columns=("x", "y"),
-            )
+            # load_record_data(
+            #     name="distributions",
+            #     filenames=path_arrays/f"distributions.tsv",
+            #     # replicate_outputs=index["detector"],
+            #     # objects={"distributions": "AD11"},
+            #     columns=("x", "y"),
+            # )
 
             #
             # Oscillations
             #
-            from dgf_reactoranueosc.NueSurvivalProbability2 import \
-                NueSurvivalProbability2
-            NueSurvivalProbability2.replicate(
+            from dgm_reactor_neutrino import NueSurvivalProbability
+            NueSurvivalProbability.replicate(
                 name="oscprob",
                 distance_unit="m",
                 replicate_outputs=combinations["reactor.detector"],
-                oscprobArgConversion = True
+                leading_mass_splitting_3l_name="DeltaMSq32",
+                surprobArgConversion=True,
             )
             kinematic_integrator_enu >> inputs("oscprob.enu")
-            parameters("constant.baseline") >> inputs("oscprob.L")
-            parameters.get_value("all.conversion.oscprobArgConversion") >> inputs("oscprob.oscprobArgConversion")
+            parameters("constant.baseline_subdetector") >> inputs("oscprob.L")
+            parameters.get_value("all.conversion.surprobArgConversion") >> inputs("oscprob.surprobArgConversion")
             nodes("oscprob") << parameters("free.oscprob")
+            nodes("oscprob") << parameters("constant.oscprob")
+            nodes("oscprob") << parameters("constrained.oscprob")
+
+            # from models.nodes.NueSurvivalProbability4Weighted import NueSurvivalProbability4Weighted
+            # NueSurvivalProbability4Weighted.replicate(
+            #     name="oscprob_subdetectors",
+            #     distance_unit="m",
+            #     replicate_outputs=combinations["reactor.detector.subdetector"],
+            #     surprobArgConversion=True,
+            # )
+            # kinematic_integrator_enu >> inputs("oscprob_subdetectors.enu")
+            # parameters("constant.baseline_subdetector") >> inputs("oscprob_subdetectors.L")
+            # parameters.get_value("all.conversion.surprobArgConversion") >> inputs("oscprob_subdetectors.surprobArgConversion")
+            # nodes("oscprob_subdetectors") << parameters("free.oscprob")
+            # nodes("oscprob_subdetectors") << parameters("constant.oscprob")
+            # nodes("oscprob_subdetectors") << parameters("constrained.oscprob")
+
+            # Product.replicate(
+            #     parameters("all.baseline_subdetector_weights"),
+            #     outputs("oscprob_subdetectors"),
+            #     name="oscprob_weighted",
+            #     replicate_outputs=combinations["reactor.detector.subdetector"],
+            # )
+            #
+            # Sum.replicate(
+            #     outputs("oscprob_weighted"),
+            #     name="oscprob",
+            #     replicate_outputs=combinations["reactor.detector"],
+            # )
 
             #
             # Nominal antineutrino spectrum
             #
             load_graph(
                 name = "reactor_anue.neutrino_per_fission_per_MeV_input",
-                filenames = path_arrays / f"reactor_anue_spectra_50kev.{self._source_type}",
+                filenames = path_arrays / f"reactor_anue_spectra_50kev.tsv",
                 x = "enu",
                 y = "spec",
                 merge_x = True,
@@ -323,7 +370,7 @@ class model_experiment_v0:
             #     - introduced for the consistency with GNA
             #     - to be removed in v1 TODO
             #
-            InterpolatorGroup.replicate(
+            Interpolator.replicate(
                 method = "exp",
                 names = {
                     "indexer": "reactor_anue.spec_indexer_pre",
@@ -338,7 +385,7 @@ class model_experiment_v0:
             #
             # Interpolate for the integration mesh
             #
-            InterpolatorGroup.replicate(
+            Interpolator.replicate(
                 method = "exp",
                 names = {
                     "indexer": "reactor_anue.spec_indexer",
@@ -363,32 +410,31 @@ class model_experiment_v0:
             # Livetime
             #
             load_record_data(  # TODO: Change data
-                name = "daily_data.detector_all",
-                filenames = path_arrays/f"livetimes.{self._source_type}",
-                replicate_outputs = index["detector"],
-                objects = {"livetimes": "AD11"},
-                columns = ("day", "livetime", "eff", "efflivetime"),
+                name="daily_data.detector_all",
+                filenames=path_arrays/f"livetimes.tsv",
+                replicate_outputs=index["detector"],
+                # objects = {"livetimes": "AD11"},
+                columns=("day", "livetime", "eff", "efflivetime"),
             )
             from models.bundles.refine_detector_data import \
                 refine_detector_data2
             refine_detector_data2(  # FIXME
                 data("daily_data.detector_all"),
-                data.child("daily_data.detector"),
+                data.create_child("daily_data.detector"),
                 detectors = index["detector"]
             )
 
             load_record_data(
                 name = "daily_data.reactor_all",
-                filenames = path_arrays/f"weekly_power.{self._source_type}",
-                replicate_outputs = ("core_data",),
+                filenames = path_arrays/f"weekly_power.tsv",
+                replicate_outputs = index["reactor"],
                 columns = ("week", "day", "core", "power") + index["isotope_lower"],
-                key_order = (0,)
             )
 
             from models.bundles.refine_reactor_data import refine_reactor_data2
             refine_reactor_data2(
                 data("daily_data.reactor_all"),
-                data.child("daily_data.reactor"),
+                data.create_child("daily_data.reactor"),
                 reactors = index["reactor"],
                 isotopes = index["isotope"],
             )
@@ -396,35 +442,35 @@ class model_experiment_v0:
             Array.from_storage(
                 "daily_data.detector.livetime",
                 storage("data"),
-                remove_used_arrays = True,
+                remove_processed_arrays = True,
                 dtype = "d"
             )
 
             Array.from_storage(
                 "daily_data.detector.eff",
                 storage("data"),
-                remove_used_arrays = True,
+                remove_processed_arrays = True,
                 dtype = "d"
             )
 
             Array.from_storage(
                 "daily_data.detector.efflivetime",
                 storage("data"),
-                remove_used_arrays = True,
+                remove_processed_arrays = True,
                 dtype = "d"
             )
 
             Array.from_storage(
                 "daily_data.reactor.power",
                 storage("data"),
-                remove_used_arrays = True,
+                remove_processed_arrays = True,
                 dtype = "d"
             )
 
             Array.from_storage(
                 "daily_data.reactor.fission_fraction",
                 storage("data"),
-                remove_used_arrays = True,
+                remove_processed_arrays = True,
                 dtype = "d"
             )
             del storage["data.daily_data"]
@@ -457,61 +503,26 @@ class model_experiment_v0:
             #
             # Fission fraction normalized
             #
-            if self._fission_fraction_normalized:
-                Sum.replicate(
+            Product.replicate(
+                    parameters("all.reactor.energy_per_fission"),
                     outputs("daily_data.reactor.fission_fraction_scaled"),
-                    name="daily_data.reactor.fission_fraction_scaled_normalization_factor",
-                    replicate_outputs=index["reactor"],
-                )
-
-                Division.replicate(
-                    outputs("daily_data.reactor.fission_fraction_scaled"),
-                    outputs("daily_data.reactor.fission_fraction_scaled_normalization_factor"),
-                    name="daily_data.reactor.fission_fraction_scaled_normalized",
+                    name = "reactor.energy_per_fission_weighted_MeV",
                     replicate_outputs=combinations["reactor.isotope"],
-                )
+                    )
 
-                Product.replicate(
-                        parameters("all.reactor.energy_per_fission"),
-                        outputs("daily_data.reactor.fission_fraction_scaled_normalized"),
-                        name = "reactor.energy_per_fission_weighted_MeV",
-                        replicate_outputs=combinations["reactor.isotope"],
-                        )
+            Sum.replicate(
+                    outputs("reactor.energy_per_fission_weighted_MeV"),
+                    name = "reactor.energy_per_fission_average_MeV",
+                    replicate_outputs=index["reactor"],
+                    )
 
-                Sum.replicate(
-                        outputs("reactor.energy_per_fission_weighted_MeV"),
-                        name = "reactor.energy_per_fission_average_MeV",
-                        replicate_outputs=index["reactor"],
-                        )
-
-                Product.replicate(
-                        outputs("daily_data.reactor.power"),
-                        outputs("daily_data.reactor.fission_fraction_scaled_normalized"),
-                        outputs("reactor.thermal_power_nominal_MeVs"),
-                        name = "reactor.thermal_power_isotope_MeV_per_second",
-                        replicate_outputs=combinations["reactor.isotope"],
-                        )
-            else:
-                Product.replicate(
-                        parameters("all.reactor.energy_per_fission"),
-                        outputs("daily_data.reactor.fission_fraction_scaled"),
-                        name = "reactor.energy_per_fission_weighted_MeV",
-                        replicate_outputs=combinations["reactor.isotope"],
-                        )
-
-                Sum.replicate(
-                        outputs("reactor.energy_per_fission_weighted_MeV"),
-                        name = "reactor.energy_per_fission_average_MeV",
-                        replicate_outputs=index["reactor"],
-                        )
-
-                Product.replicate(
-                        outputs("daily_data.reactor.power"),
-                        outputs("daily_data.reactor.fission_fraction_scaled"),
-                        outputs("reactor.thermal_power_nominal_MeVs"),
-                        name = "reactor.thermal_power_isotope_MeV_per_second",
-                        replicate_outputs=combinations["reactor.isotope"],
-                        )
+            Product.replicate(
+                    outputs("daily_data.reactor.power"),
+                    outputs("daily_data.reactor.fission_fraction_scaled"),
+                    outputs("reactor.thermal_power_nominal_MeVs"),
+                    name = "reactor.thermal_power_isotope_MeV_per_second",
+                    replicate_outputs=combinations["reactor.isotope"],
+                    )
 
             Division.replicate(
                     outputs("reactor.thermal_power_isotope_MeV_per_second"),
@@ -530,14 +541,12 @@ class model_experiment_v0:
                     )
 
             # Total effective number of fissions from a Reactor seen in the Detector during Period
-            from dagflow.lib import ArraySum
             ArraySum.replicate(
                     outputs("reactor_detector.number_of_fissions_daily"),
                     name = "reactor_detector.number_of_fissions",
                     )
 
             # Baseline factor from Reactor to Detector: 1/(4πL²)
-            from dgf_reactoranueosc.InverseSquareLaw import InverseSquareLaw
             InverseSquareLaw.replicate(
                 name="baseline_factor_per_cm2",
                 scale="m_to_cm",
@@ -586,8 +595,8 @@ class model_experiment_v0:
             # [Nν·cm²/fission/proton]
             #
             Product.replicate(
-                    outputs.get_value("ibd.crosssection"),
-                    outputs.get_value("ibd.jacobian"),
+                    outputs.get_value("kinematics.ibd.crosssection"),
+                    outputs.get_value("kinematics.ibd.jacobian"),
                     name="ibd.crosssection_jacobian",
             )
 
@@ -605,14 +614,14 @@ class model_experiment_v0:
                     replicate_outputs=combinations["reactor.isotope.detector"]
             )
 
-            outputs("neutrino_cm2_per_MeV_per_fission_per_proton.part.main") >> inputs("kinematics_integral.main")
+            outputs("neutrino_cm2_per_MeV_per_fission_per_proton.part.main") >> inputs("kinematics.integral.main")
 
             #
             # Multiply by the scaling factors:
             #  - main:  fissions_per_second[p,r,i] × effective live time[p,d] × N protons[d] × efficiency[d]
             #
             Product.replicate(
-                    outputs("kinematics_integral.main"),
+                    outputs("kinematics.integral.main"),
                     outputs("reactor_detector.number_of_fissions_nprotons_per_cm2"),
                     name = "eventscount.parts.main",
                     replicate_outputs = combinations["reactor.isotope.detector"]
@@ -632,14 +641,33 @@ class model_experiment_v0:
                 replicate_outputs=index["detector"],
             )
 
+            EnergyResolution.replicate(path="detector.eres")
+
+            nodes.get_value("detector.eres.sigma_rel") << parameters("constrained.detector.eres")
+            outputs.get_value("edges.energy_evis") >> inputs.get_value(
+                "detector.eres.matrix.e_edges"
+            )
+            outputs.get_value("edges.energy_evis") >> inputs.get_value("detector.eres.e_edges")
+            outputs.get_value("edges.energy_erec") >> inputs.get_value(
+                "detector.eres.matrix.e_edges_out"
+            )
+
+            # EnergyResolution.replicate(path="detector.eres_fine")
+            # nodes.get_value("detector.eres_fine.sigma_rel") << parameters("constrained.detector.eres")
+            # outputs.get_value("edges.energy_evis_fine") >> inputs.get_value("detector.eres_fine.matrix.e_edges")
+            # outputs.get_value("edges.energy_evis_fine") >> inputs.get_value("detector.eres_fine.e_edges")
+
+            VectorMatrixProduct.replicate(name="eventscount.erec", mode="column", replicate_outputs=combinations["detector"])
+            outputs.get_value("detector.eres.matrix") >> inputs("eventscount.erec.matrix")
+            outputs("eventscount.raw") >> inputs("eventscount.erec.vector")
+
             Product.replicate(
                 outputs("detector.normalization"),
-                outputs("eventscount.raw"),
-                name = "eventscount.fine.ibd_normalized",
+                outputs("eventscount.erec"),
+                name="eventscount.fine.ibd_normalized",
                 replicate_outputs=index["detector"],
             )
 
-            from dgf_detector.Rebin import Rebin
             Rebin.replicate(
                 names={"matrix": "detector.rebin_matrix_ibd", "product": "eventscount.final.ibd"},
                 replicate_outputs=index["detector"],
@@ -655,8 +683,7 @@ class model_experiment_v0:
                 replicate_outputs=index["detector"],
             )
 
-            from dagflow.lib.Concatenation import Concatenation
-            Concatenation.replicate(
+            Sum.replicate(
                 outputs("eventscount.final.detector_period"),
                 name="eventscount.final.concatenated",
             )
@@ -664,14 +691,13 @@ class model_experiment_v0:
             #
             # Covariance matrices
             #
-            from dagflow.lib.CovarianceMatrixGroup import CovarianceMatrixGroup
             covariance = CovarianceMatrixGroup(store_to="covariance")
 
             for name, parameters_source in (
                     ("eres", "detector.eres"),
                     ("detector_relative", "detector.detector_relative"),
                     ("energy_per_fission", "reactor.energy_per_fission"),
-                    ("nominal_thermal_power", "reactor.nominal_thermal_power"),
+                    # ("nominal_thermal_power", "reactor.nominal_thermal_power"),
                     ("fission_fraction", "reactor.fission_fraction_scale"),
             ):
                 covariance.add_covariance_for(name, parameters_nuisance_normalized[parameters_source])
@@ -685,6 +711,64 @@ class model_experiment_v0:
             # Create Nuisance parameters
             Sum.replicate(outputs("statistic.nuisance.parts"), name="statistic.nuisance.all")
 
+            MonteCarlo.replicate(
+                name="data.pseudo.self",
+                mode="asimov",
+            )
+            outputs.get_value("eventscount.final.concatenated") >> inputs.get_value("data.pseudo.self.data")
+
+            Proxy.replicate(
+                name="data.pseudo.proxy",
+            )
+            outputs.get_value("data.pseudo.self") >> inputs.get_value("data.pseudo.proxy.input")
+
+            Cholesky.replicate(
+                name="covariance.cholesky.proxy",
+            )
+            outputs.get_value("data.pseudo.proxy") >> inputs.get_value("covariance.cholesky.proxy")
+
+            SumMatOrDiag.replicate(name="covariance.covmat_full_n")
+            outputs.get_value("data.pseudo.proxy") >> nodes.get_value("covariance.covmat_full_n")
+            outputs.get_value("covariance.covmat_syst.sum") >> nodes.get_value("covariance.covmat_full_n")
+
+            Cholesky.replicate(name="cholesky.covmat_full_n")
+            outputs.get_value("covariance.covmat_full_n") >> inputs.get_value("cholesky.covmat_full_n")
+
+            # list_parameters_nuisance_normalized = list(parameters_nuisance_normalized.walkvalues())
+            # npars_nuisance = len(list_parameters_nuisance_normalized)
+
+            # from dagflow.lib.ParArrayInput import ParArrayInput
+            # parinp_mc = ParArrayInput(
+            #     name="mc.parameters.inputs",
+            #     parameters=list_parameters_nuisance_normalized,
+            # )
+
+            # MonteCarlo.replicate(
+            #     name="mc.parameters.toymc",
+            #     mode="normal-unit",
+            #     shape=(npars_nuisance,),
+            #     generator=self._random_generator,
+            # )
+            # outputs.get_value("mc.parameters.toymc") >> parinp_mc
+            # nodes["mc.parameters.inputs"] = parinp_mc
+
+            Chi2.replicate(
+                name="statistics.chi2_n",
+            )
+            outputs.get_value("eventscount.final.concatenated") >> inputs.get_value("statistics.chi2_n.theory")
+            outputs.get_value("data.pseudo.proxy") >> inputs.get_value("statistics.chi2_n.data")
+            outputs.get_value("covariance.cholesky.proxy") >> inputs.get_value("statistics.chi2_n.errors")
+
+            Sum.replicate(
+                outputs.get_value("statistic.nuisance.all"),
+                outputs.get_value("statistics.chi2_n"),
+                name="statistics.chi2_n_full",
+            )
+
+            Chi2.replicate(name="statistics.chi2n_covmat")
+            outputs.get_value("data.pseudo.proxy") >> inputs.get_value("statistics.chi2n_covmat.data")
+            outputs.get_value("eventscount.final.concatenated") >> inputs.get_value("statistics.chi2n_covmat.theory")
+            outputs.get_value("cholesky.covmat_full_n") >> inputs.get_value("statistics.chi2n_covmat.errors")
 
             # fmt: on
 
@@ -695,7 +779,7 @@ class model_experiment_v0:
         storage.read_paths(index=index)
         graph.build_index_dict(index)
 
-        labels_mk = NestedMKDict(labels, sep=".")
+        labels_mk = NestedMapping(labels, sep=".")
         if self._strict:
             for key in processed_keys_set:
                 labels_mk.delete_with_parents(key)
@@ -706,15 +790,20 @@ class model_experiment_v0:
 
     @staticmethod
     def _create_generator(seed: int) -> Generator:
-        from numpy.random import SeedSequence, MT19937
-        sequence, = SeedSequence(seed).spawn(1)
+        from numpy.random import MT19937, SeedSequence
+
+        (sequence,) = SeedSequence(seed).spawn(1)
         algo = MT19937(seed=sequence.spawn(1)[0])
         return Generator(algo)
 
     def touch(self) -> None:
         frozen_nodes = (
-            "pseudo.data", "cholesky.stat.frozen", "cholesky.covmat_full_p.stat_frozen",
-            "cholesky.covmat_full_p.stat_unfrozen", "cholesky.covmat_full_n", "covariance.data.frozen",
+            "pseudo.data",
+            "cholesky.stat.frozen",
+            "cholesky.covmat_full_p.stat_frozen",
+            "cholesky.covmat_full_p.stat_unfrozen",
+            "cholesky.covmat_full_n",
+            "covariance.data.frozen",
         )
         for node in frozen_nodes:
             self.storage.get_value(f"nodes.{node}").touch()

@@ -1,13 +1,20 @@
 #!/usr/bin/env python
+from __future__ import annotations
 from argparse import Namespace
 
-from dagflow.graph import Graph
-from dagflow.logger import DEBUG as INFO4
-from dagflow.logger import INFO1, INFO2, INFO3, set_level
-from dagflow.storage import NodeStorage
-from models import load_model, available_models
+from dag_modelling.core.graph import Graph
+from dag_modelling.core.storage import NodeStorage
+from dag_modelling.tools.logger import DEBUG as INFO4
+from dag_modelling.tools.logger import INFO1, INFO2, INFO3, set_level
 
-# from dagflow.plot import plot_auto
+from dag_modelling.tools import disable_implicit_numpy_multithreading
+
+# isort: on
+
+from argparse import Namespace
+
+from dag_modelling.tools.logger import set_verbosity
+from models import load_model
 
 set_level(INFO1)
 
@@ -24,7 +31,6 @@ def main(opts: Namespace) -> None:
             close=opts.close,
             strict=opts.strict,
             override_indices=override_indices,
-            fission_fraction_normalized=opts.fission_fraction_normalized,
             parameter_values=opts.par
             )
 
@@ -72,7 +78,7 @@ def main(opts: Namespace) -> None:
         plot_graph(graph, storage)
 
     if opts.graph_from_node:
-        from dagflow.graphviz import GraphDot
+        from dag_modelling.graphviz import GraphDot
 
         nodepath, filepath = opts.graph_from_node
         node = storage("nodes")[nodepath]
@@ -86,7 +92,7 @@ def main(opts: Namespace) -> None:
 
 
 def plot_graph(graph: Graph, storage: NodeStorage) -> None:
-    from dagflow.graphviz import GraphDot
+    from dag_modelling.graphviz import GraphDot
 
     GraphDot.from_graph(graph, show="all").savegraph("output/model_v0.dot")
     GraphDot.from_graph(
@@ -205,16 +211,10 @@ if __name__ == "__main__":
     )
 
     model = parser.add_argument_group("model", "model related options")
-    model.add_argument(
-        "--fission-fraction-normalized",
-        action="store_true",
-        help="fission fraction correction",
-    )
     model.add_argument("--seed", default=0, type=int, help="seed of randomization")
     model.add_argument(
         "--version",
         default="v0",
-        choices=available_models(),
         help="model version",
     )
     model.add_argument("--model-options", "--mo", default={}, help="Model options as yaml dict")

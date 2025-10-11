@@ -37,7 +37,7 @@ def sync_reactor_detector_data(
         reactor_day[period] = reactor_day_p_new
 
         for key, data in reactor_data.walkitems():
-            if key[0]=='days':
+            if key[0] == "days":
                 continue
             if not period in key:
                 continue

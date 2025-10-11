@@ -4,12 +4,12 @@ from numba import njit
 from numpy import empty
 from numpy.typing import NDArray
 
-from multikeydict.nestedmkdict import NestedMKDict
+from nested_mapping import NestedMapping
 
 
 def refine_detector_data(
-    source: NestedMKDict,
-    target: NestedMKDict,
+    source: NestedMapping,
+    target: NestedMapping,
     *,
     detectors: Sequence[str],
     periods: Sequence[str] = ("6AD", "8AD", "7AD"),
@@ -20,7 +20,7 @@ def refine_detector_data(
     for det in detectors:
         day = source["day", det]
         step = day[1:] - day[:-1]
-        assert (step==1).all(), "Expect detector data for each day"
+        assert (step == 1).all(), "Expect detector data for each day"
 
         ndet = source["ndet", det]
         for periodname in periods:
@@ -36,7 +36,7 @@ def refine_detector_data(
             days = source["day", det][mask_period]
             days_stored = days_storage.setdefault(periodname, days)
             if days is not days_stored:
-                assert all(days==days_stored)
+                assert all(days == days_stored)
 
     if clean_source:
         for key in tuple(source.walkkeys()):
@@ -44,8 +44,8 @@ def refine_detector_data(
 
 
 def refine_detector_data2(
-    source: NestedMKDict,
-    target: NestedMKDict,
+    source: NestedMapping,
+    target: NestedMapping,
     *,
     detectors: Sequence[str],
     clean_source: bool = True,
@@ -55,7 +55,7 @@ def refine_detector_data2(
     for det in detectors:
         day = source["day", det]
         step = day[1:] - day[:-1]
-        assert (step==1).all(), "Expect detector data for each day"
+        assert (step == 1).all(), "Expect detector data for each day"
 
         for field in fields:
             data = source[field, det]
@@ -66,7 +66,7 @@ def refine_detector_data2(
         days = source["day", det]
         days_stored = days_storage.setdefault(det, days)
         if days is not days_stored:
-            assert all(days==days_stored)
+            assert all(days == days_stored)
 
     if clean_source:
         for key in tuple(source.walkkeys()):

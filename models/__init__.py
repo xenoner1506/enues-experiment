@@ -1,6 +1,6 @@
 from typing import Mapping
 
-from dagflow.logger import logger
+from dag_modelling.tools.logger import logger
 
 from .experiment_v0 import model_experiment_v0
 
