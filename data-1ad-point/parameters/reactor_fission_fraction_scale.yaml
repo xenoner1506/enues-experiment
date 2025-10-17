@@ -1,0 +1,32 @@
+# Corrections for the fission fractions
+#
+
+format: ["value", "sigma_percent"]
+state: "variable"
+parameters:
+  fission_fraction_scale:
+    U235:  [1, 5]
+    U238:  [1, 5]
+    Pu239: [1, 5]
+    Pu241: [1, 5]
+labels:
+  fission_fraction_scale:
+    U235:
+      text: 'Fission fraction scale for ²³⁵U'
+      latex: 'Fission fraction scale for $^{235}$U'
+      mark: 'f(²³⁵U)'
+    U238:
+      text: 'Fission fraction scale for ²³⁸U'
+      latex: 'Fission fraction scale for $^{238}$U'
+      mark: 'f(²³⁸U)'
+    Pu239:
+      text: 'Fission fraction scale for ²³⁹Pu'
+      latex: 'Fission fraction scale for $^{239}$Pu'
+      mark: 'f(²³⁹Pu)'
+    Pu241:
+      text: 'Fission fraction scale for ²⁴¹Pu'
+      latex: 'Fission fraction scale for $^{241}$Pu'
+      mark: 'f(²⁴¹Pu)'
+    group:
+      text: 'Fission fraction scale{space_key}'
+      mark: 'f'

@@ -1,0 +1,27 @@
+# Constants for IBD cross section
+
+format: 'value'
+state: 'fixed'
+parameters:
+  PhaseSpaceFactor: 1.7152 # Wilkinson Nucl. Phys. A377, 474(1982)
+  g:                1.2601
+  f:                1.0
+  f2:               3.706
+
+labels:
+  PhaseSpaceFactor:
+    text: "IBD phase space factor"
+    latex: "IBD phase space factor $f_\\mathrm{p.s.}$"
+    mark: "f(p.s.)"
+  f:
+    text: "vector coupling constant f"
+    latex: "vector coupling constant $f$"
+    mark: "f"
+  g:
+    text: "axial-vector coupling constant g"
+    latex: "axial-vector coupling constant $g$"
+    mark: "g"
+  f2:
+    text: "anomalous nucleon isovector magnetic moment f₂"
+    latex: "anomalous nucleon isovector magnetic moment $f_2$"
+    mark: "f₂"

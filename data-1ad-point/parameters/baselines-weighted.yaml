@@ -1,0 +1,22 @@
+# Reactor-detector baselines, m
+
+format: "value"
+state: "fixed"
+parameters:
+  baseline_subdetector:
+    R1:
+      AD11: 15
+        # sub1: 30
+        # sub1: 100
+  baseline_subdetector_weights:
+    R1:
+      AD11: 1
+
+
+labels:
+  baseline:
+    text: "Baseline sub-detector {}, m"
+    mark: "sub-L"
+  baseline:
+    text: "Baseline sub-detector weight {}"
+    mark: "sub-w_L"

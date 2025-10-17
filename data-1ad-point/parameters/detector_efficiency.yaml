@@ -1,0 +1,11 @@
+# Detector efficiency
+
+format: "value"
+state: "fixed"
+parameters:
+  efficiency: 1
+
+labels:
+  efficiency:
+    text:  "AD Efficiency"
+    mark:  "ε"

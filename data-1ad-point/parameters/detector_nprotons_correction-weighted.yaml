@@ -1,0 +1,10 @@
+format: "value"
+state: "fixed"
+parameters:
+  nprotons_nominal_ad: 2.7626098224888965e+29
+  nprotons_correction:
+    AD11: 1.000
+
+labels:
+  nprotons_nominal: "Nominal number of protons in AD, Np"
+  nprotons_correction: "Correction to number of protons {}"

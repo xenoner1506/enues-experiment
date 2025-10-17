@@ -1,0 +1,7 @@
+format: "value"
+state: "fixed"
+parameters:
+  reactorPowerConversion: 6.2415090744607627e+21
+labels:
+  reactorPowerConversion: "Convert W[GW]/[MeV] to 1/T[s]"
+

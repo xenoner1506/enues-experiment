@@ -1,0 +1,11 @@
+# Detector efficiency
+
+format: "value"
+state: "variable"
+parameters:
+  global_normalization: 1.0
+
+labels:
+  global_normalization:
+    text:  "Global normalization"
+    mark:  "n"

@@ -1,0 +1,17 @@
+# Detector relative energy scale
+
+format: ["value", "sigma_percent"]
+state: "variable"
+parameters:
+  detector_relative:
+    efficiency_factor: [1, 0.1]  # dayabay_data_repo/efficiency/P17B_efficiency.py
+    energy_scale_factor: [1, 0.2]
+
+labels:
+  detector_relative:
+   energy_scale_factor:
+      text: "Detector relative energy scale{space_key}"
+      mark: "s"
+   efficiency_factor:
+      text: "Detector relative efficiency{space_key}"
+      mark: "εᵢ"

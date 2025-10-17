@@ -1,0 +1,12 @@
+# Detector IAV
+
+format: ["value", "sigma_absolute"]
+state: "variable"
+parameters:
+  iav_offdiag_scale_factor: [1, 0.04]
+
+labels:
+  iav_offdiag_scale_factor:
+    text: "IAV scale for offdiagonal elements{space_key}"
+    mark: "s"
+

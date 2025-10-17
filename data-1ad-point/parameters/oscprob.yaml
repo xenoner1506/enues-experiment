@@ -1,0 +1,25 @@
+format: "value"
+state: "variable"
+parameters:
+  SinSq2Theta13: 0.0856
+  SinSq2Theta14: 0.1
+  DeltaMSq32: 2.453e-3
+  DeltaMSq41: 1.000e-3
+
+labels:
+  # SinSq2Theta13:
+  #   text: 'Neutrino mixing amplitude sin²2θ₁₃'
+  #   latex: 'Neutrino mixing amplitude $\\sin^{2}2\\theta_{13}$'
+  #   mark: 'sin²2θ₁₃'
+  SinSq2Theta14:
+    text: 'Neutrino mixing amplitude sin²2θ₁₃'
+    latex: 'Neutrino mixing amplitude $\\sin^{2}2\\theta_{14}$'
+    mark: 'sin²2θ₁₃'
+  # DeltaMSq32:
+  #   text: 'Neutrino mass splitting Δm²₃₂'
+  #   latex: 'Neutrino mass splitting $\\Delta m^{2}_{32}$'
+  #   mark: 'Δm²₃₂'
+  DeltaMSq41:
+    text: 'Neutrino mass splitting Δm²₃₂'
+    latex: 'Neutrino mass splitting $\\Delta m^{2}_{41}$'
+    mark: 'Δm²₃₂'

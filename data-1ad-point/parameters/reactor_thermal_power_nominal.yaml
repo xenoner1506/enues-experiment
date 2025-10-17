@@ -1,0 +1,11 @@
+format: ["value", "sigma_percent"]
+state: "fixed"
+
+parameters:
+  nominal_thermal_power:
+    R1: [3, 0.1]
+
+labels:
+  nominal_thermal_power: 
+    text: "Nominal thermal power{space_key}, GW"
+    mark: "Wth"

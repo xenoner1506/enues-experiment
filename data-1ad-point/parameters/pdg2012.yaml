@@ -1,0 +1,30 @@
+# Inputs from PDG2012 and PDG2014:
+#     - https://pdglive.lbl.gov
+#     - PDG 2014 is used for neutron lifetime
+
+format: 'value'
+state: 'fixed'
+parameters:
+  NeutronLifeTime: 880.3       #s
+  NeutronMass:     939.565379  # MeV
+  ProtonMass:      938.272046  # MeV
+  ElectronMass:    0.510998928 # MeV
+
+labels:
+  NeutronLifeTime:
+    text: "neutron lifetime, s (PDG2014)"
+    latex: "$\\tau_n$ neutron lifetime, s (PDG2014)"
+    mark: "τ(n)"
+  NeutronMass:
+    text: "neutron mass, MeV (PDG2012)"
+    latex: "$m_n$ neutron mass, MeV (PDG2012)"
+    mark: "m(n)"
+  ProtonMass:
+    text: "proton mass, MeV (PDG2012)"
+    latex: "$m_p$ proton mass, MeV (PDG2012)"
+    mark: "m(p)"
+  ElectronMass:
+    text: "electron mass, MeV (PDG2012)"
+    latex: "$m_e$ electron mass, MeV (PDG2012)"
+    mark: "m(e)"
+

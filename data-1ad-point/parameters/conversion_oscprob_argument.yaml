@@ -1,0 +1,8 @@
+format: "value"
+state: "fixed"
+parameters:
+  surprobArgConversion: 5067.7307161563951
+labels:
+  surprobArgConversion:
+    text: "Convert Δm²[eV²]L[km]/E[MeV] to natural units"
+    latex: "Convert $\\delta m^{2}$[eV$^{2}$]L[km]/E[MeV] to natural units"

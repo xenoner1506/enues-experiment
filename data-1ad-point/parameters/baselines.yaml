@@ -1,0 +1,15 @@
+# Reactor-detector baselines, m
+
+format: "value"
+state: "fixed"
+parameters:
+  baseline:
+    R1:
+      AD11: 15
+      # AD11: 30
+      # AD11: 100
+
+labels:
+  baseline:
+    text: "Baseline {}, m"
+    mark: "L"
