@@ -225,21 +225,18 @@ class model_experiment_v1:
             #
             # Define binning
             #
-            in_edges_fine = linspace(0, 12, 481)
-            in_edges_final = arange(.05, 12.01, .05)
+            t_e = linspace(0.0, 8.0, 801)
+            anue = linspace(0.0, 8.0, 801)
+            in_edges_final = linspace(.5, 8.0, 76)
 
             edges_costheta, _ = Array.replicate(name="edges.costheta", array=[-1, 1])
-            edges_energy_common, _ = Array.replicate(
-                name="edges.energy_common", array=in_edges_fine
-            )
             edges_energy_final, _ = Array.replicate(
                 name="edges.energy_final", array=in_edges_final
             )
-            View.replicate(name="edges.energy_enu", output=edges_energy_common)
-            edges_energy_edep, _ = View.replicate(name="edges.energy_edep", output=edges_energy_common)
 
-            edges_energy_t_e, _ = Array.replicate(name="edges.energy_t_e", array=linspace(0.0, 12.0, 1201))
-            edges_energy_anue, _ = Array.replicate(name="edges.energy_anue", array=linspace(0.0, 12.0, 1201))
+
+            edges_energy_t_e, _ = Array.replicate(name="edges.energy_t_e", array=t_e)
+            edges_energy_anue, _ = Array.replicate(name="edges.energy_anue", array=anue)
             edges_energy_evis, _ = View.replicate(name="edges.energy_evis", output=edges_energy_t_e)
             edges_energy_erec, _ = View.replicate(name="edges.energy_erec", output=edges_energy_t_e)
 
@@ -556,7 +553,7 @@ class model_experiment_v1:
             )
 
             Product.replicate(
-                outputs("reactor_anue.neutrino_per_fission_per_MeV_nominal_pre"),
+                # outputs("reactor_anue.neutrino_per_fission_per_MeV_nominal_pre"),
                 outputs["reactor_detector.n_fissions_nelectrons_per_cm2"],
                 outputs["kinematics.enues"],
                 name="kinematics.enues_anue",
@@ -571,6 +568,7 @@ class model_experiment_v1:
 
             integral_2d_1d = Integral2d1d.replicate(
                 keepdim=0,
+                step=anue[1] - anue[0],
                 name="kinematics_enues.integral1d",
                 replicate_outputs=combinations["reactor.isotope.detector"],
             )
@@ -620,7 +618,7 @@ class model_experiment_v1:
             edges_energy_erec >> inputs.get_value("detector.rebin.matrix_enues.edges_old")
             edges_energy_final >> inputs.get_value("detector.rebin.matrix_enues.edges_new")
             # Pass the fine-bin spectra into inputs.
-            outputs.get_dict("eventscount.stages.evis") >> inputs.get_dict(
+            outputs.get_dict("eventscount.stages.erec") >> inputs.get_dict(
                 "eventscount.final.enues"
             )
 
