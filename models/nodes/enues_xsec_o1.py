@@ -67,13 +67,17 @@ class ENuESXsecO1(Node):
         # self._const_fps = self._add_input("PhaseSpaceFactor", positional=False, keyword=True)
 
     def _function(self):
+        print(
+            self._const_me.data[0],
+            self._const_fermi.data[0],
+            self._sin_sq_weinberg.data[0],)
         _enues_xsec(
             self._enu.data,
             self._t_e.data,
             self._result._data,
             self._const_me.data[0],
-            self._const_fermi.data[0],
             self._sin_sq_weinberg.data[0],
+            self._const_fermi.data[0],
             # self._const_fps.data[0],
         )
 
@@ -114,14 +118,14 @@ def _enues_xsec(  # Вроде функция ниже переписана
     sq_g_L = g_L**2
     sq_g_R = g_R**2
     composition_gL_gR_Emass = g_L * g_R * ElectronMass
-    composition_sqCF_Emass_reverse2pi = (ConstFermi**2) * ElectronMass / (2 * pi)
+    composition_sqCF_Emass_reverse2pi = ConstFermi**2 * ElectronMass / (2 * pi)
 
     result = Result.ravel()
     for i, (e_i, te_i) in enumerate(zip(EnuIn.ravel(), T_eIn.ravel())):
-        if e_i > 0:
+        if te_i < 2 * e_i * e_i / (ElectronMass + 2 * e_i):
             t = te_i / e_i
-            a = sq_g_L * ((1 - t) ** 2)
+            a = sq_g_R * (1 - t) ** 2
             b = composition_gL_gR_Emass * t / e_i
-            result[i] = composition_sqCF_Emass_reverse2pi * (sq_g_R + a - b)
+            result[i] = composition_sqCF_Emass_reverse2pi * (sq_g_L + a - b)
         else:
             result[i] = 0.0
