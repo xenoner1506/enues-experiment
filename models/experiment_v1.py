@@ -624,6 +624,26 @@ class model_experiment_v1:
                 "eventscount.final.enues"
             )
 
+            Sum.replicate(
+                outputs["eventscount.final.enues"],
+                name="eventscount.final.concatenated",
+            )
+
+            MonteCarlo.replicate(
+                name="data.pseudo.self",
+                mode="asimov",
+            )
+            outputs["eventscount.final.concatenated"] >> inputs["data.pseudo.self.data"]
+            # self._frozen_nodes["pseudodata"] = (nodes.get_value("data.pseudo.self"),)
+
+            Cholesky.replicate(name="cholesky.stat.variable")
+            outputs["eventscount.final.concatenated"]>> inputs["cholesky.stat.variable"]
+
+            Chi2.replicate(name="statistic.stat.chi2p")
+            outputs["eventscount.final.concatenated"] >> inputs["statistic.stat.chi2p.theory"]
+            outputs.get_value("cholesky.stat.variable") >> inputs["statistic.stat.chi2p.errors"]
+            outputs.get_value("data.pseudo.self") >> inputs["statistic.stat.chi2p.data"]
+
             # Compute a product of global normalization and per-detector efficiency
             # factor, to be used to scale the IBD spectrum.
             # Product.replicate(
