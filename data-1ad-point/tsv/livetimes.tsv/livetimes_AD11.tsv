@@ -1,4 +1,4 @@
-start_utc	end_utc	startdate	enddate	day	ndays	livetime	eff	efflivetime
+start_utc	end_utc	startdate	enddate	day	ndays	livetime	eff	eff_livetime
 946684800	946771200	2000-01-01	2000-01-02	0	1	86400.0	0.1	8640.0
 946771200	946857600	2000-01-02	2000-01-03	1	1	86400.0	0.1	8640.0
 946857600	946944000	2000-01-03	2000-01-04	2	1	86400.0	0.1	8640.0

@@ -50,7 +50,7 @@ def refine_detector_data2(
     detectors: Sequence[str],
     clean_source: bool = True,
 ) -> None:
-    fields = ("livetime", "eff", "efflivetime")
+    fields = ("livetime", "eff", "eff_livetime")
     target["days"] = (days_storage := {})
     for det in detectors:
         day = source["day", det]

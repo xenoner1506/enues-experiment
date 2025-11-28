@@ -1,0 +1,22 @@
+# Constants for IBD cross section
+
+
+format: "value"
+state: "variable" #написать для переменых по образцу
+parameters:
+  sin_sq_weinberg: 0.235
+  const_fermi: 1.116e-11 #MeV**(-2)
+  ElectronMassmass: 0.511 #MeV
+
+
+labels:
+  sin_sq_weinberg:
+    text:  "SinSqWeinberg"
+    mark:  "SinSqWeinberg"
+  const_fermi:
+    text: "Const Fermi"
+    mark: "ConstFermi"
+  ElectronMassmass:
+    text: "Electron mass"
+    mark: "ElectronMass"
+

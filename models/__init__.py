@@ -3,9 +3,11 @@ from typing import Mapping
 from dag_modelling.tools.logger import logger
 
 from .experiment_v0 import model_experiment_v0
+from .experiment_v1 import model_experiment_v1
 
 _dayabay_models = {
     "v0": model_experiment_v0,
+    "v1": model_experiment_v1,
 }
 
 
@@ -20,9 +22,7 @@ def load_model(version, model_options: Mapping | str = {}, **kwargs):
         model_options = load(model_options, Loader)
 
     if not isinstance(model_options, dict):
-        raise RuntimeError(
-            "model_options expects a python dictionary or yaml dictionary"
-        )
+        raise RuntimeError("model_options expects a python dictionary or yaml dictionary")
 
     model_options = dict(model_options, **kwargs)
 
