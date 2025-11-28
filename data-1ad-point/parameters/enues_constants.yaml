@@ -1,0 +1,9 @@
+format: "value"
+state: "fixed"
+parameters:
+  const_fermi: 1.116e-11  # MeV^(-2)
+
+labels:
+  const_fermi:
+    text: "Const Fermi"
+    mark: "ConstFermi"

@@ -32,6 +32,7 @@ class model_experiment_v1:
         "graph",
         "index",
         "combinations",
+        "_monte_carlo_mode",
         "_override_indices",
         "_path_data",
         "_source_type",
@@ -44,6 +45,7 @@ class model_experiment_v1:
     graph: Graph | None
     index: dict[str, tuple[str, ...]]
     combinations: dict[str, tuple[tuple[str, ...], ...]]
+    _monte_carlo_mode: str
     _path_data: Path
     _override_indices: Mapping[str, Sequence[str]]
     _source_type: Literal["tsv"]
@@ -58,6 +60,7 @@ class model_experiment_v1:
         strict: bool = True,
         close: bool = True,
         override_indices: Mapping[str, Sequence[str]] = {},
+        monte_carlo_mode: str = "asimov",
         seed: int = 0,
         parameter_values: dict[str, float | str] = {},
     ):
@@ -66,6 +69,7 @@ class model_experiment_v1:
 
         self.graph = None
         self.storage = NodeStorage()
+        self._monte_carlo_mode = monte_carlo_mode
         self._path_data = Path("data-1ad-point")
         self._source_type = source_type
         self._override_indices = override_indices
@@ -154,30 +158,23 @@ class model_experiment_v1:
             #
             # Load parameters
             #
-            load_parameters(path="oscprob",    load=path_parameters/"oscprob.yaml")
-            load_parameters(path="oscprob",    load=path_parameters/"oscprob_solar.yaml", joint_nuisance=True)
-            load_parameters(path="oscprob",    load=path_parameters/"oscprob_constants.yaml")
-
             load_parameters(path="ibd",        load=path_parameters/"pdg2012.yaml")
-            load_parameters(path="ibd.csc",    load=path_parameters/"ibd_constants.yaml")
             load_parameters(path="conversion", load=path_parameters/"conversion_thermal_power.yaml")
-            load_parameters(path="conversion", load=path_parameters/"conversion_oscprob_argument.yaml")
 
             load_parameters(                   load=path_parameters/"baselines.yaml")
-            load_parameters(                   load=path_parameters/"baselines-weighted.yaml")
 
             load_parameters(path="detector",   load=path_parameters/"detector_efficiency.yaml")
             load_parameters(path="detector",   load=path_parameters/"detector_normalization.yaml")
-            load_parameters(path="detector",   load=path_parameters/"detector_nprotons_correction.yaml")
             load_parameters(path="detector",   load=path_parameters/"detector_nelectrons_correction.yaml")
             load_parameters(path="detector",   load=path_parameters/"detector_eres.yaml")
-            load_parameters(path="detector",   load=path_parameters/"detector_relative.yaml",)
+            load_parameters(path="detector",   load=path_parameters/"detector_relative.yaml")
 
             load_parameters(path="reactor",    load=path_parameters/"reactor_energy_per_fission.yaml")
             load_parameters(path="reactor",    load=path_parameters/"reactor_thermal_power_nominal.yaml")
             load_parameters(path="reactor",    load=path_parameters/"reactor_fission_fraction_scale.yaml")
 
             load_parameters(path="enues",      load=path_parameters/"enues.yaml")
+            load_parameters(path="enues",      load=path_parameters/"enues_constants.yaml")
 
             # TODO: Add backgrounds
             # load_parameters(path="bkg.rate",   load=path_parameters/"bkg_rates.yaml")
@@ -240,7 +237,7 @@ class model_experiment_v1:
             edges_energy_evis, _ = View.replicate(name="edges.energy_evis", output=edges_energy_t_e)
             edges_energy_erec, _ = View.replicate(name="edges.energy_erec", output=edges_energy_t_e)
 
-            Array.replicate(name="reactor_anue.spec_model_edges", array=antineutrino_model_edges)
+            Array.replicate(name="reactor_antineutrino.spec_model_edges", array=antineutrino_model_edges)
 
             # ENuES
             integration_orders_t_e = Array.from_value("kinematics_enues_sampler.ordersx", 3, edges=edges_energy_t_e)
@@ -279,57 +276,24 @@ class model_experiment_v1:
             # Nominal antineutrino spectrum
             #
             load_graph(
-                name = "reactor_anue.neutrino_per_fission_per_MeV_input",
+                name = "reactor_antineutrino.neutrino_per_fission_per_MeV_input",
                 filenames = path_arrays / f"reactor_anue_spectra_50kev.tsv",
                 x = "enu",
                 y = "spec",
                 merge_x = True,
                 replicate_outputs = index["isotope"],
             )
-
-            #
-            # Pre-interpolate input spectrum on coarser grid
-            # NOTE:
-            #     - not needed with the current scheme:
-            #         - spectrum correction applied by multiplication
-            #     - introduced for the consistency with GNA
-            #     - to be removed in v1 TODO
-            #
             Interpolator.replicate(
-                method = "exp",
-                names = {
-                    "indexer": "reactor_anue.spec_indexer_pre",
-                    "interpolator": "reactor_anue.neutrino_per_fission_per_MeV_nominal_pre",
-                    },
-                replicate_outputs = index["isotope"],
+                method="exp",
+                names={
+                    "indexer": "reactor_antineutrino.spec_indexer",
+                    "interpolator": "reactor_antineutrino.neutrino_per_fission_per_MeV_nominal",
+                },
+                replicate_outputs=index["isotope"],
             )
-            outputs.get_value("reactor_anue.neutrino_per_fission_per_MeV_input.enu") >> inputs.get_value("reactor_anue.neutrino_per_fission_per_MeV_nominal_pre.xcoarse")
-            outputs("reactor_anue.neutrino_per_fission_per_MeV_input.spec") >> inputs("reactor_anue.neutrino_per_fission_per_MeV_nominal_pre.ycoarse")
-            kinematic_integrator_enu >> inputs.get_value("reactor_anue.neutrino_per_fission_per_MeV_nominal_pre.xfine")
-
-            #
-            # Interpolate for the integration mesh
-            #
-            Interpolator.replicate(
-                method = "exp",
-                names = {
-                    "indexer": "reactor_anue.spec_indexer",
-                    "interpolator": "reactor_anue.neutrino_per_fission_per_MeV_nominal",
-                    },
-                replicate_outputs = index["isotope"],
-            )
-            outputs.get_value("reactor_anue.spec_model_edges") >> inputs.get_value("reactor_anue.neutrino_per_fission_per_MeV_nominal.xcoarse")
-            outputs("reactor_anue.neutrino_per_fission_per_MeV_nominal_pre") >> inputs("reactor_anue.neutrino_per_fission_per_MeV_nominal.ycoarse")
-            # kinematic_integrator_enu >> inputs.get_value("reactor_anue.neutrino_per_fission_per_MeV_nominal.xfine")
-
-            #
-            # Antineutrino spectrum
-            #
-            Product.replicate(
-                    outputs("reactor_anue.neutrino_per_fission_per_MeV_nominal"),
-                    name = "reactor_anue.part.neutrino_per_fission_per_MeV_main",
-                    replicate_outputs=index["isotope"],
-                    )
+            outputs["reactor_antineutrino.neutrino_per_fission_per_MeV_input.enu"] >> inputs["reactor_antineutrino.neutrino_per_fission_per_MeV_nominal.xcoarse"]
+            outputs["reactor_antineutrino.neutrino_per_fission_per_MeV_input.spec"] >> inputs["reactor_antineutrino.neutrino_per_fission_per_MeV_nominal.ycoarse"]
+            kinematic_integrator_enu >> inputs["reactor_antineutrino.neutrino_per_fission_per_MeV_nominal.xfine"]
 
             #
             # Livetime
@@ -479,24 +443,6 @@ class model_experiment_v1:
             )
             parameters("constant.baseline") >> inputs("baseline_factor_per_cm2")
 
-            # Number of protons per detector
-            Product.replicate(
-                    parameters.get_value("all.detector.nprotons_nominal_ad"),
-                    parameters("all.detector.nprotons_correction"),
-                    name = "detector.nprotons",
-                    replicate_outputs = index["detector"]
-            )
-
-            # Number of fissions × N protons × ε / (4πL²)  (main)
-            Product.replicate(
-                    outputs("reactor_detector.number_of_fissions"),
-                    outputs("detector.nprotons"),
-                    outputs("baseline_factor_per_cm2"),
-                    parameters.get_value("all.detector.efficiency"),
-                    name = "reactor_detector.number_of_fissions_nprotons_per_cm2",
-                    replicate_outputs=combinations["reactor.isotope.detector"],
-                    )
-
             # Detector live time
             ArraySum.replicate(
                     outputs("daily_data.detector.livetime"),
@@ -553,8 +499,8 @@ class model_experiment_v1:
             )
 
             Product.replicate(
-                # outputs("reactor_anue.neutrino_per_fission_per_MeV_nominal_pre"),
                 outputs["reactor_detector.n_fissions_nelectrons_per_cm2"],
+                outputs["reactor_antineutrino.neutrino_per_fission_per_MeV_nominal"],
                 outputs["kinematics.enues"],
                 name="kinematics.enues_anue",
                 replicate_outputs=combinations["reactor.isotope.detector"],
@@ -566,7 +512,7 @@ class model_experiment_v1:
 
             from models.nodes.integral_2d_1d import Integral2d1d
 
-            integral_2d_1d = Integral2d1d.replicate(
+            Integral2d1d.replicate(
                 keepdim=0,
                 step=anue[1] - anue[0],
                 name="kinematics_enues.integral1d",
@@ -629,7 +575,8 @@ class model_experiment_v1:
 
             MonteCarlo.replicate(
                 name="data.pseudo.self",
-                mode="asimov",
+                mode=self._monte_carlo_mode,
+                generator=self._generator,
             )
             outputs["eventscount.final.concatenated"] >> inputs["data.pseudo.self.data"]
             # self._frozen_nodes["pseudodata"] = (nodes.get_value("data.pseudo.self"),)
