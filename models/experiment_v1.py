@@ -405,7 +405,7 @@ class model_experiment_v1:
             #
             Product.replicate(
                     parameters("all.reactor.nominal_thermal_power"),
-                    parameters.get_value("all.conversion.reactorPowerConversion"),
+                    # parameters.get_value("all.conversion.reactorPowerConversion"),
                     name = "reactor.thermal_power_nominal_MeVs",
                     replicate_outputs = index["reactor"]
                     )
