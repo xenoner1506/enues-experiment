@@ -83,6 +83,10 @@ class model_experiment_v1:
         if parameter_values:
             self.set_parameters(parameter_values)
 
+    @property
+    def nbins(self) -> int:
+        return self.storage["outputs.eventscount.final.concatenated"].data.shape[0]
+
     def build(self):
         storage = self.storage
         path_data = self._path_data
