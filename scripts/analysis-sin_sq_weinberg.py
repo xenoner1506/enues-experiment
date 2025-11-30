@@ -12,6 +12,7 @@ Example of call
       --constrained-parameters survival_probability detector reactor background reactor_anue \
       --output fit-result.yaml
 """
+import IPython
 from argparse import ArgumentParser, Namespace
 from pprint import pprint
 from typing import TYPE_CHECKING
@@ -59,11 +60,17 @@ def main(args: Namespace) -> None:
 
     # Sometimes fit is unstable. And constraining of free parameters
     # might improve robustness of fit
+    # TODO: remove parameters of interests (enues.sin_sq_weinberg) from minimization_parameters
 
     minimizer = IMinuitMinimizer(
         chi2, parameters=minimization_parameters, nbins=model.nbins, verbose=args.verbose > 1
     )
 
+    print(f"Initial value of chi-squared: {chi2.data}")
+
+    # TODO: add values for scanning
+    # TODO: add for-cycle for setting enues.sin_sq_weinberg and do fit in each point (model.set_parameters)
+    # TODO: add list for saving chi-squared value in each point of enues.sin_sq_weinberg
     # Start fitting
     result = do_fit(minimizer, model, args.n_iterations)
 
@@ -75,6 +82,9 @@ def main(args: Namespace) -> None:
         filter_save_fit(result, args.output)
 
     pprint(result)
+
+    if args.interactive:
+        IPython.embed()
 
 
 if __name__ == "__main__":
@@ -112,6 +122,10 @@ if __name__ == "__main__":
         default="detector_period",
         choices=["detector", "detector_period"],
         help="Choose type of concatenation for final observation: by detector or by detector and period",
+    )
+
+    model.add_argument(
+        "--interactive"
     )
 
     fit_options = parser.add_argument_group("fit", "Set fit procedure")
