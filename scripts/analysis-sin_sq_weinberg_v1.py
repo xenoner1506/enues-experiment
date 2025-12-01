@@ -75,7 +75,7 @@ def main(args: Namespace) -> None:
     for v in sin_sq_w_values:
         model.set_parameters({"enues.sin_sq_weinberg": v})
         result = do_fit(minimizer, model, args.n_iterations)
-        chi2_values.append(result["fun"])
+        chi2_values.append(result["fun"][0])
     plt.scatter(sin_sq_w_values, chi2_values)
     plt.savefig("chi2_sin_sq_w.pdf", dpi=150, bbox_inches='tight')
     plt.close()
