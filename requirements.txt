@@ -1,4 +1,4 @@
 ipython
 dgm-reactor-neutrino
-git+https://git.jinr.ru/dagflow-team/dag-modelling@release
+dag-modelling
 dgm-fit
