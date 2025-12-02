@@ -228,13 +228,12 @@ class model_experiment_v1:
             #
             t_e = linspace(0.0, 8.0, 801)
             anue = linspace(0.0, 8.0, 801)
-            in_edges_final = linspace(.5, 8.0, 76)
+            in_edges_final = arange(.5, 8.1, 0.1)
 
             edges_costheta, _ = Array.replicate(name="edges.costheta", array=[-1, 1])
             edges_energy_final, _ = Array.replicate(
                 name="edges.energy_final", array=in_edges_final
             )
-
 
             edges_energy_t_e, _ = Array.replicate(name="edges.energy_t_e", array=t_e)
             edges_energy_anue, _ = Array.replicate(name="edges.energy_anue", array=anue)
@@ -555,7 +554,7 @@ class model_experiment_v1:
             outputs.get_dict("eventscount.stages.evis") >> inputs.get_dict(
                 "eventscount.stages.erec.vector"
             )
-
+ 
             Rebin.replicate(
                 names={
                     "matrix": "detector.rebin.matrix_enues",
@@ -571,6 +570,20 @@ class model_experiment_v1:
             outputs.get_dict("eventscount.stages.erec") >> inputs.get_dict(
                 "eventscount.final.enues"
             )
+
+            # Product.replicate(
+            #     parameters.get_value("all.detector.global_normalization"),
+            #     parameters.get_dict("selected.detector.parameters_relative.efficiency_factor"),
+            #     name="detector.normalization",
+            #     replicate_outputs=index["detector"],
+            # )
+            #
+            # Product.replicate(
+            #     outputs.get_dict("detector.normalization"),
+            #     outputs.get_dict("eventscount.stages.evis"),
+            #     name="eventscount.fine.enues_normalized",
+            #     replicate_outputs=combinations["detector.period"],
+            # )
 
             Sum.replicate(
                 outputs["eventscount.final.enues"],
@@ -592,15 +605,6 @@ class model_experiment_v1:
             outputs["eventscount.final.concatenated"] >> inputs["statistic.stat.chi2p.theory"]
             outputs.get_value("cholesky.stat.variable") >> inputs["statistic.stat.chi2p.errors"]
             outputs.get_value("data.pseudo.self") >> inputs["statistic.stat.chi2p.data"]
-
-            # Compute a product of global normalization and per-detector efficiency
-            # factor, to be used to scale the IBD spectrum.
-            # Product.replicate(
-            #     parameters.get_value("all.detector.global_normalization"),
-            #     parameters.get_dict("selected.detector.parameters_relative.efficiency_factor"),
-            #     name="detector.normalization",
-            #     replicate_outputs=index["detector"],
-            # )
 
     @staticmethod
     def _create_generator(seed: int) -> Generator:
@@ -638,8 +642,14 @@ class model_experiment_v1:
             par.push(value)
             print(f"Set {parname}={svalue}")
 
-    def next_sample(self) -> None:
-        self.storage.get_value("nodes.pseudo.parameters.toymc").next_sample()
-        self.storage.get_value("nodes.pseudo.parameters.inputs.toymc").touch()
-        self.storage.get_value("nodes.pseudo.data").next_sample()
-        self.storage.get_value("nodes.pseudo.parameters.inputs.initial").touch()
+    def next_sample(self, *, mc_parameters: bool = True, mc_statistics: bool = True) -> None:
+        if mc_parameters:
+            self.storage.get_value("nodes.mc.parameters.toymc").next_sample()
+            self.storage.get_value("nodes.mc.parameters.inputs").touch()
+
+        if mc_statistics:
+            self.storage.get_value("nodes.data.pseudo.self").next_sample()
+
+        if mc_parameters:
+            self.storage.get_value("nodes.mc.parameters.toymc").reset()
+            self.storage.get_value("nodes.mc.parameters.inputs").touch()
