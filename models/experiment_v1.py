@@ -228,7 +228,7 @@ class model_experiment_v1:
             #
             t_e = linspace(0.0, 8.0, 801)
             anue = linspace(0.0, 8.0, 801)
-            in_edges_final = arange(.5, 8.1, 0.1)
+            in_edges_final = arange(.5, 7.1, 0.1)
 
             edges_costheta, _ = Array.replicate(name="edges.costheta", array=[-1, 1])
             edges_energy_final, _ = Array.replicate(
@@ -554,6 +554,21 @@ class model_experiment_v1:
             outputs.get_dict("eventscount.stages.evis") >> inputs.get_dict(
                 "eventscount.stages.erec.vector"
             )
+
+            # Product.replicate(
+            #     parameters.get_value("all.detector.global_normalization"),
+            #     parameters.get_dict("selected.detector.parameters_relative.efficiency_factor"),
+            #     name="detector.normalization",
+            #     replicate_outputs=index["detector"],
+            # )
+            #
+            Product.replicate(
+                parameters.get_value("all.detector.global_normalization"),
+                # outputs.get_dict("detector.normalization"),
+                outputs.get_dict("eventscount.stages.evis"),
+                name="eventscount.fine.enues_normalized",
+                replicate_outputs=combinations["detector"],
+            )
  
             Rebin.replicate(
                 names={
@@ -567,23 +582,9 @@ class model_experiment_v1:
             edges_energy_erec >> inputs.get_value("detector.rebin.matrix_enues.edges_old")
             edges_energy_final >> inputs.get_value("detector.rebin.matrix_enues.edges_new")
             # Pass the fine-bin spectra into inputs.
-            outputs.get_dict("eventscount.stages.erec") >> inputs.get_dict(
+            outputs.get_dict("eventscount.fine.enues_normalized") >> inputs.get_dict(
                 "eventscount.final.enues"
             )
-
-            # Product.replicate(
-            #     parameters.get_value("all.detector.global_normalization"),
-            #     parameters.get_dict("selected.detector.parameters_relative.efficiency_factor"),
-            #     name="detector.normalization",
-            #     replicate_outputs=index["detector"],
-            # )
-            #
-            # Product.replicate(
-            #     outputs.get_dict("detector.normalization"),
-            #     outputs.get_dict("eventscount.stages.evis"),
-            #     name="eventscount.fine.enues_normalized",
-            #     replicate_outputs=combinations["detector.period"],
-            # )
 
             Sum.replicate(
                 outputs["eventscount.final.enues"],
