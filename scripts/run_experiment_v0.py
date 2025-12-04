@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from __future__ import annotations
 from argparse import Namespace
+import matplotlib.pyplot as plt
 
 from dag_modelling.core.graph import Graph
 from dag_modelling.core.storage import NodeStorage
@@ -37,11 +38,6 @@ def main(opts: Namespace) -> None:
     graph = model.graph
     storage = model.storage
 
-    if opts.interactive:
-        from IPython import embed
-
-        embed(colors="neutral")
-
     if not graph.closed:
         print("Nodes")
         print(storage("nodes").to_table(truncate="auto"))
@@ -70,6 +66,11 @@ def main(opts: Namespace) -> None:
         folder, sources = opts.plot[0], opts.plot[1:]
         for source in sources:
             storage(source).plot(folder=f"{folder}/{source.replace('.', '/')}")
+    if opts.plot_observables:
+        plt.scatter(model.storage["outputs.edges.energy_final"].data[:-1], model.storage["outputs.eventscount.final.concatenated"].data)
+        plt.scatter(model.storage["outputs.edges.energy_erec"].data[:-1], model.storage["outputs.eventscount.stages.erec.AD11"].data)
+        plt.savefig("observables.pdf", dpi=150, bbox_inches='tight')
+        plt.close()
 
     if opts.latex:
         storage.to_datax("output/model_v0_data.tex")
@@ -89,6 +90,12 @@ def main(opts: Namespace) -> None:
             maxdepth=opts.maxdepth,
             keep_direction=True,
         ).savegraph(filepath)
+
+    if opts.interactive:
+        from IPython import embed
+
+        embed(colors="neutral")
+
 
 
 def plot_graph(graph: Graph, storage: NodeStorage) -> None:
@@ -168,6 +175,11 @@ if __name__ == "__main__":
         nargs="+",
         help="plot the nodes in storages",
         metavar=("folder", "storage"),
+    )
+    plot.add_argument(
+        "--plot-observables",
+        action="store_true",
+        help="Plot observables"
     )
 
     storage = parser.add_argument_group("storage", "storage related options")

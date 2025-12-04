@@ -71,7 +71,20 @@ def main(args: Namespace) -> None:
     )
 
     # Start fitting
-    result = do_fit(minimizer, model, args.n_iterations)
+    sin_sq_bf = []
+    chi2_bf=[]
+    for idx in range(100):
+        model.next_sample(mc_parameters=False)
+        result = do_fit(minimizer, model, args.n_iterations)
+        print(result)
+        sin_sq_bf.append(result["xdict"]["enues.sin_sq_weinberg"])
+        chi2_bf.append(result["fun"])
+
+    plt.hist(chi2_bf, "auto")
+    plt.savefig("chi2_bf.pdf")
+    plt.figure()
+    plt.hist(sin_sq_bf, "auto")
+    plt.savefig("parameter_bf.pdf")
 
     if args.profile_parameters:
         errors_profiled = minimizer.profile_errors(args.profile_parameters)
@@ -81,9 +94,6 @@ def main(args: Namespace) -> None:
         filter_save_fit(result, args.output)
 
     pprint(result)
-
-    if args.interactive:
-        IPython.embed()
 
     if args.interactive:
         IPython.embed()
